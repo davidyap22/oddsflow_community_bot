@@ -3,14 +3,13 @@
  *
  * Usage:
  *   npx tsx post-to-group.ts --list-rooms
- *   npx tsx post-to-group.ts --room <room_id> --title "Title" --content "Content"
- *   npx tsx post-to-group.ts --room <room_id> --title "Title" --content "Content" --images img1.jpg img2.png
- *   npx tsx post-to-group.ts --room <room_id> --title "Title" --content "Content" --name "OddsFlow AI" --pin
+ *   npx tsx post-to-group.ts --key <api_key> --room <room_id> --title "Title" --content "Content"
+ *   npx tsx post-to-group.ts --key <api_key> --room <room_id> --title "Title" --content "Content" --images img1.jpg img2.png
+ *   npx tsx post-to-group.ts --key <api_key> --room <room_id> --title "Title" --content "Content" --name "OddsFlow AI" --pin
  *
  * Environment variables in .env.local:
  *   NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
  *   NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
- *   BOT_API_KEY=xxx  (from bot_api_keys table)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -34,14 +33,9 @@ for (const ep of envPaths) {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const BOT_API_KEY = process.env.BOT_API_KEY!;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local');
-  process.exit(1);
-}
-if (!BOT_API_KEY) {
-  console.error('Missing BOT_API_KEY in .env.local (run SELECT api_key FROM bot_api_keys)');
   process.exit(1);
 }
 
@@ -85,6 +79,7 @@ async function listAllRooms() {
 }
 
 async function createPost() {
+  const apiKey = getArg('key');
   const roomId = getArg('room');
   const title = getArg('title');
   const content = getArg('content');
@@ -94,8 +89,8 @@ async function createPost() {
   const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()) : [];
   const imagePaths = getArgList('images');
 
-  if (!roomId || !title || !content) {
-    console.error('Usage: npx tsx post-to-group.ts --room <id> --title "..." --content "..."');
+  if (!apiKey || !roomId || !title || !content) {
+    console.error('Usage: npx tsx post-to-group.ts --key <api_key> --room <id> --title "..." --content "..."');
     console.error('Optional: --images img1.jpg img2.png --name "Bot" --tags "ai,news" --pin');
     process.exit(1);
   }
@@ -149,7 +144,7 @@ async function createPost() {
 
   // Call RPC function (bypasses RLS via SECURITY DEFINER)
   const { data, error } = await supabase.rpc('create_bot_post', {
-    p_api_key: BOT_API_KEY,
+    p_api_key: apiKey,
     p_room_id: roomId,
     p_title: title,
     p_content: content,
