@@ -1,0 +1,12 @@
+{
+  "name": "oddsflow-community-bot",
+  "version": "1.0.0",
+  "scripts": {
+    "post": "tsx post-to-group.ts",
+    "list-rooms": "tsx post-to-group.ts --list-rooms"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "tsx": "^4.19.0"
+  }
+}
