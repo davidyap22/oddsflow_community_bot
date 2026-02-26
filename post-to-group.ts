@@ -100,24 +100,46 @@ async function createPost() {
     process.exit(1);
   }
 
-  // Build metadata with image URLs if provided
+  // Upload images and collect URLs
   const metadata: Record<string, unknown> = {};
   if (imagePaths.length > 0) {
-    // For image upload, read files and encode as base64 URLs
-    // (actual Storage upload requires auth; images can also be external URLs)
+    console.log(`\nUploading ${imagePaths.length} image(s)...`);
     const imageUrls: string[] = [];
     for (const imgPath of imagePaths) {
-      const absPath = path.resolve(imgPath);
-      if (!fs.existsSync(absPath)) {
-        console.error(`   Warning: Image not found: ${absPath}, skipping`);
-        continue;
-      }
-      // If it's a URL (starts with http), use directly
+      // External URL - use directly
       if (imgPath.startsWith('http')) {
         imageUrls.push(imgPath);
-      } else {
-        console.error(`   Warning: Local image upload not supported without service role key.`);
-        console.error(`   Use external image URLs instead: --images https://example.com/img.jpg`);
+        console.log(`   URL: ${imgPath}`);
+        continue;
+      }
+      // Local file - upload to Storage
+      const absPath = path.resolve(imgPath);
+      if (!fs.existsSync(absPath)) {
+        console.error(`   Warning: Not found: ${absPath}, skipping`);
+        continue;
+      }
+      const fileBuffer = fs.readFileSync(absPath);
+      const ext = path.extname(absPath).slice(1).toLowerCase() || 'jpg';
+      const storagePath = `posts/${roomId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const contentTypeMap: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+      };
+      const { error: uploadErr } = await supabase.storage
+        .from('community-posts')
+        .upload(storagePath, fileBuffer, {
+          contentType: contentTypeMap[ext] || 'image/jpeg',
+          cacheControl: '3600',
+          upsert: false,
+        });
+      if (uploadErr) {
+        console.error(`   Warning: Upload failed for ${imgPath}: ${uploadErr.message}`);
+        continue;
+      }
+      const { data: urlData } = supabase.storage.from('community-posts').getPublicUrl(storagePath);
+      if (urlData?.publicUrl) {
+        imageUrls.push(urlData.publicUrl);
+        console.log(`   Uploaded: ${path.basename(absPath)} -> ${urlData.publicUrl}`);
       }
     }
     if (imageUrls.length > 0) {
