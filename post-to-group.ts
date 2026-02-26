@@ -143,17 +143,19 @@ async function createPost() {
   }
 
   // Call RPC function (bypasses RLS via SECURITY DEFINER)
-  const { data, error } = await supabase.rpc('create_bot_post', {
+  const rpcParams: Record<string, unknown> = {
     p_api_key: apiKey,
     p_room_id: roomId,
     p_title: title,
     p_content: content,
-    p_author_name: authorName,
     p_content_type: contentType,
     p_tags: tags,
     p_is_pinned: pin,
     p_metadata: metadata,
-  });
+  };
+  if (authorName) rpcParams.p_author_name = authorName;
+
+  const { data, error } = await supabase.rpc('create_bot_post', rpcParams);
 
   if (error) {
     console.error('Post failed:', error.message);
@@ -163,7 +165,7 @@ async function createPost() {
   console.log(`\nPosted to group ${roomId}`);
   console.log(`   ID: ${data.id}`);
   console.log(`   Title: ${title}`);
-  console.log(`   Author: ${authorName}`);
+  console.log(`   Author: ${data.author_name || authorName}`);
   if (pin) console.log(`   Pinned`);
 }
 

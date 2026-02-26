@@ -56,7 +56,7 @@ npx tsx post-to-group.ts \
 | `--room` | **Yes** | Group slug (e.g. `epl-fans`) or UUID. Run `--list-rooms` to see available groups. |
 | `--title` | **Yes** | Post title. Wrap in quotes. |
 | `--content` | **Yes** | Post body. Wrap in quotes. Supports plain text. |
-| `--name` | No | Author display name. Default: auto-fetch from user profile. Examples: `"OddsFlow AI"`, `"Match Reporter"` |
+| `--name` | No | Author display name override. If omitted, automatically uses the API key owner's real name and avatar from their account. Only use this to override with a custom name like `"OddsFlow AI"`. |
 | `--type` | No | Content type. Default: `discussion`. Options: `discussion`, `analysis`, `news`, `prediction` |
 | `--tags` | No | Comma-separated tags. Example: `"ai,epl,matchday"` |
 | `--images` | No | Space-separated image paths or URLs. Local files are uploaded to Supabase Storage. Example: `--images photo.jpg https://example.com/img.png` |
@@ -114,7 +114,7 @@ npx tsx post-to-group.ts \
 - **Images**: Local files (jpg/png/gif/webp) are auto-uploaded to Supabase Storage. External URLs are used directly.
 - **Room ID**: You can use either the human-readable slug (`epl-fans`) or the UUID. Prefer slugs for readability.
 - **Errors**: If you see `Invalid API key`, ask the user to provide a valid key or generate one from `/dashboard/api-keys`.
-- **Author**: If `--name` is omitted, the post uses the API key owner's profile name.
+- **Author**: If `--name` is omitted, the post automatically uses the API key owner's real name and profile picture from their account. The `--name` flag is only needed to override with a custom display name.
 
 ## How It Works (Technical)
 
