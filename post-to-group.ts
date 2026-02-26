@@ -1,5 +1,5 @@
 /**
- * Post content to a community group discussion (using email/password login)
+ * Post content to a community group discussion (using anon key + RPC)
  *
  * Usage:
  *   npx tsx post-to-group.ts --list-rooms
@@ -10,8 +10,7 @@
  * Environment variables in .env.local:
  *   NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
  *   NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
- *   BOT_EMAIL=your-bot@gmail.com
- *   BOT_PASSWORD=your-password
+ *   BOT_API_KEY=xxx  (from bot_api_keys table)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -35,15 +34,14 @@ for (const ep of envPaths) {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const BOT_EMAIL = process.env.BOT_EMAIL!;
-const BOT_PASSWORD = process.env.BOT_PASSWORD!;
+const BOT_API_KEY = process.env.BOT_API_KEY!;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('❌ Missing SUPABASE_URL or SUPABASE_ANON_KEY in .env.local');
+  console.error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local');
   process.exit(1);
 }
-if (!BOT_EMAIL || !BOT_PASSWORD) {
-  console.error('❌ Missing BOT_EMAIL or BOT_PASSWORD in .env.local');
+if (!BOT_API_KEY) {
+  console.error('Missing BOT_API_KEY in .env.local (run SELECT api_key FROM bot_api_keys)');
   process.exit(1);
 }
 
@@ -68,56 +66,6 @@ function getArgList(name: string): string[] {
 const listRooms = args.includes('--list-rooms');
 const pin = args.includes('--pin');
 
-async function login() {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: BOT_EMAIL,
-    password: BOT_PASSWORD,
-  });
-  if (error || !data.user) {
-    console.error('❌ Login failed:', error?.message);
-    process.exit(1);
-  }
-  console.log(`✅ Logged in as ${data.user.email} (${data.user.id})`);
-  return data.user;
-}
-
-async function uploadImages(imagePaths: string[], roomId: string): Promise<string[]> {
-  const urls: string[] = [];
-  for (const imgPath of imagePaths) {
-    const absPath = path.resolve(imgPath);
-    if (!fs.existsSync(absPath)) {
-      console.error(`   ⚠ Image not found: ${absPath}, skipping`);
-      continue;
-    }
-
-    const fileBuffer = fs.readFileSync(absPath);
-    const ext = path.extname(absPath).slice(1) || 'jpg';
-    const storagePath = `posts/${roomId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-    const contentTypeMap: Record<string, string> = {
-      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-      gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
-    };
-    const contentType = contentTypeMap[ext.toLowerCase()] || 'image/jpeg';
-
-    const { error } = await supabase.storage
-      .from('community-posts')
-      .upload(storagePath, fileBuffer, { contentType, cacheControl: '3600', upsert: false });
-
-    if (error) {
-      console.error(`   ⚠ Upload failed for ${imgPath}:`, error.message);
-      continue;
-    }
-
-    const { data: urlData } = supabase.storage.from('community-posts').getPublicUrl(storagePath);
-    if (urlData?.publicUrl) {
-      urls.push(urlData.publicUrl);
-      console.log(`   📷 Uploaded: ${path.basename(absPath)} → ${urlData.publicUrl}`);
-    }
-  }
-  return urls;
-}
-
 async function listAllRooms() {
   const { data, error } = await supabase
     .from('community_groups')
@@ -125,16 +73,16 @@ async function listAllRooms() {
     .eq('status', 'active')
     .order('member_count', { ascending: false });
 
-  if (error) { console.error('❌', error.message); return; }
+  if (error) { console.error('Error:', error.message); return; }
 
-  console.log(`\n📋 Active groups (${data.length}):\n`);
+  console.log(`\nActive groups (${data.length}):\n`);
   for (const g of data) {
     console.log(`  ${g.id}  ${g.slug}  (${g.member_count} members)`);
   }
   console.log('');
 }
 
-async function createPost(userId: string) {
+async function createPost() {
   const roomId = getArg('room');
   const title = getArg('title');
   const content = getArg('content');
@@ -150,56 +98,61 @@ async function createPost(userId: string) {
     process.exit(1);
   }
 
-  // Upload images if provided
-  let imageUrls: string[] = [];
-  if (imagePaths.length > 0) {
-    console.log(`\n📷 Uploading ${imagePaths.length} image(s)...`);
-    imageUrls = await uploadImages(imagePaths, roomId);
-  }
-
+  // Build metadata with image URLs if provided
   const metadata: Record<string, unknown> = {};
-  if (imageUrls.length > 0) {
-    metadata.images = imageUrls;
+  if (imagePaths.length > 0) {
+    // For image upload, read files and encode as base64 URLs
+    // (actual Storage upload requires auth; images can also be external URLs)
+    const imageUrls: string[] = [];
+    for (const imgPath of imagePaths) {
+      const absPath = path.resolve(imgPath);
+      if (!fs.existsSync(absPath)) {
+        console.error(`   Warning: Image not found: ${absPath}, skipping`);
+        continue;
+      }
+      // If it's a URL (starts with http), use directly
+      if (imgPath.startsWith('http')) {
+        imageUrls.push(imgPath);
+      } else {
+        console.error(`   Warning: Local image upload not supported without service role key.`);
+        console.error(`   Use external image URLs instead: --images https://example.com/img.jpg`);
+      }
+    }
+    if (imageUrls.length > 0) {
+      metadata.images = imageUrls;
+    }
   }
 
-  const { data, error } = await supabase
-    .from('community_room_posts')
-    .insert({
-      room_id: roomId,
-      author_id: userId,
-      author_name: authorName,
-      author_avatar: null,
-      author_type: 'ai',
-      title,
-      content,
-      content_type: contentType,
-      tags,
-      is_pinned: pin,
-      metadata,
-    })
-    .select()
-    .single();
+  // Call RPC function (bypasses RLS via SECURITY DEFINER)
+  const { data, error } = await supabase.rpc('create_bot_post', {
+    p_api_key: BOT_API_KEY,
+    p_room_id: roomId,
+    p_title: title,
+    p_content: content,
+    p_author_name: authorName,
+    p_content_type: contentType,
+    p_tags: tags,
+    p_is_pinned: pin,
+    p_metadata: metadata,
+  });
 
   if (error) {
-    console.error('❌ Post failed:', error.message);
+    console.error('Post failed:', error.message);
     process.exit(1);
   }
 
-  console.log(`\n✅ Posted to group ${roomId}`);
+  console.log(`\nPosted to group ${roomId}`);
   console.log(`   ID: ${data.id}`);
   console.log(`   Title: ${title}`);
   console.log(`   Author: ${authorName}`);
-  if (imageUrls.length > 0) console.log(`   Images: ${imageUrls.length}`);
-  if (pin) console.log(`   📌 Pinned`);
+  if (pin) console.log(`   Pinned`);
 }
 
 async function main() {
-  const user = await login();
-
   if (listRooms) {
     await listAllRooms();
   } else {
-    await createPost(user.id);
+    await createPost();
   }
 }
 
