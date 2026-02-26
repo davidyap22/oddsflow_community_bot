@@ -76,10 +76,12 @@ async function listAllRooms() {
   if (error) { console.error('Error:', error.message); return; }
 
   console.log(`\nActive groups (${data.length}):\n`);
+  console.log(`  ${'SLUG'.padEnd(30)}  MEMBERS`);
+  console.log(`  ${'----'.padEnd(30)}  -------`);
   for (const g of data) {
-    console.log(`  ${g.id}  ${g.slug}  (${g.member_count} members)`);
+    console.log(`  ${g.slug.padEnd(30)}  ${g.member_count}`);
   }
-  console.log('');
+  console.log(`\nUsage: npx tsx post-to-group.ts --room <SLUG> --title "..." --content "..."\n`);
 }
 
 async function createPost() {
