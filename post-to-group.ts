@@ -88,7 +88,7 @@ async function createPost() {
   const roomId = getArg('room');
   const title = getArg('title');
   const content = getArg('content');
-  const authorName = getArg('name') || 'Oddsflow';
+  const authorName = getArg('name'); // null = auto-fetch from Gmail profile
   const contentType = getArg('type') || 'discussion';
   const tagsRaw = getArg('tags');
   const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()) : [];
