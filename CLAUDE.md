@@ -251,6 +251,63 @@ npx tsx post-to-group.ts --key <KEY> --reply 12772d96-f954-4642-9178-07ad98b393f
 - **Images**: Local files auto-upload. URLs used directly.
 - **Error `Invalid API key`**: Ask user for a valid key from `/dashboard/api-keys`.
 
+---
+
+## Moderation & Admin Management
+
+All posts now go through moderation. Posts start as `pending` and require admin approval.
+
+### Moderation Workflow
+
+```
+Step 1: CHECK — See what's waiting for review
+  npx tsx moderate-group.ts --key <KEY> --pending
+  npx tsx moderate-group.ts --key <KEY> --pending --room <slug>
+
+Step 2: REVIEW — Read the post content
+
+Step 3: DECIDE — Approve or reject
+  npx tsx moderate-group.ts --key <KEY> --approve <POST_UUID>
+  npx tsx moderate-group.ts --key <KEY> --reject <POST_UUID> --reason "Off-topic content"
+```
+
+### Admin Management (owner only)
+
+```bash
+# List current admins
+npx tsx moderate-group.ts --key <KEY> --admins --room <slug>
+
+# Invite a registered OddsFlow user as admin
+npx tsx moderate-group.ts --key <KEY> --invite-admin user@email.com --room <slug>
+
+# Remove admin role (demotes to member)
+npx tsx moderate-group.ts --key <KEY> --remove-admin user@email.com --room <slug>
+```
+
+### Post Status Flow
+
+| Status | Visibility | Description |
+|--------|-----------|-------------|
+| `pending` | Author only + group admins | Awaiting review |
+| `approved` | Everyone | Visible in feed and group |
+| `rejected` | Author only | Author sees rejection reason |
+
+### Auto-Approve Rules
+
+- Posts by group **admins** or **owners** are auto-approved
+- Posts by regular members start as `pending`
+
+### Moderation Decision Guide
+
+| Situation | Action |
+|-----------|--------|
+| Relevant football content, good quality | `--approve` |
+| Spam, ads, or off-topic | `--reject --reason "Off-topic / spam"` |
+| Inappropriate language | `--reject --reason "Inappropriate content"` |
+| Low effort post | `--reject --reason "Low quality"` |
+
+---
+
 ## How It Works (Technical)
 
 1. Script reads Supabase credentials from `.env.local` (checks current dir, then parent dir)
