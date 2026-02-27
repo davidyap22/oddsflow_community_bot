@@ -60,6 +60,15 @@ const rejectReason = getArg('reason');
 const showAdmins = args.includes('--admins');
 const inviteAdminEmail = getArg('invite-admin');
 const removeAdminEmail = getArg('remove-admin');
+const createGroup = args.includes('--create-group');
+const groupName = getArg('name');
+const groupDesc = getArg('desc');
+const groupType = getArg('type') || 'team';
+const groupLeague = getArg('league');
+const groupVisibility = getArg('visibility') || 'public';
+const groupBanner = getArg('banner');
+const groupLogo = getArg('logo');
+const groupRules = getArg('rules');
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -205,9 +214,52 @@ async function removeAdmin() {
 }
 
 // ============================================================
+// Command: --create-group
+// ============================================================
+async function handleCreateGroup() {
+  if (!apiKey) { console.error('Error: --key is required'); process.exit(1); }
+  if (!groupName) { console.error('Error: --name is required'); process.exit(1); }
+
+  // Build logo JSONB if provided
+  let logoObj: Record<string, string> | null = null;
+  if (groupLogo) {
+    logoObj = { _profile: groupLogo };
+  }
+
+  const { data, error } = await supabase.rpc('create_bot_group', {
+    p_api_key: apiKey,
+    p_name: groupName,
+    p_description: groupDesc || '',
+    p_type: groupType,
+    p_league_name: groupLeague || null,
+    p_visibility: groupVisibility,
+    p_image_url: groupBanner || null,
+    p_logo: logoObj,
+    p_rules: groupRules || null,
+  });
+
+  if (error) { console.error('Error:', error.message); process.exit(1); }
+
+  const result = data as {
+    id: string; slug: string; name: string;
+    creator_name: string; league_name: string | null; visibility: string;
+  };
+
+  console.log(`\nGroup created successfully!\n`);
+  console.log(`  Name:       ${result.name}`);
+  console.log(`  Slug:       ${result.slug}`);
+  console.log(`  ID:         ${result.id}`);
+  console.log(`  League:     ${result.league_name || '(none)'}`);
+  console.log(`  Visibility: ${result.visibility}`);
+  console.log(`  Owner:      ${result.creator_name}`);
+  console.log(`\n  You are automatically the owner of this group.\n`);
+}
+
+// ============================================================
 // Main — detect command and dispatch
 // ============================================================
 async function main() {
+  if (createGroup) return handleCreateGroup();
   if (showPending) return listPending();
   if (approveId) return moderatePost(approveId, 'approve');
   if (rejectId) return moderatePost(rejectId, 'reject');
@@ -218,6 +270,7 @@ async function main() {
   // Help
   console.log(`
 Usage:
+  npx tsx moderate-group.ts --key <KEY> --create-group --name "Group Name" [options]
   npx tsx moderate-group.ts --key <KEY> --pending                          # List pending posts
   npx tsx moderate-group.ts --key <KEY> --pending --room <slug>            # Pending for one group
   npx tsx moderate-group.ts --key <KEY> --approve <POST_UUID>              # Approve a post
@@ -225,6 +278,16 @@ Usage:
   npx tsx moderate-group.ts --key <KEY> --admins --room <slug>             # List group admins
   npx tsx moderate-group.ts --key <KEY> --invite-admin user@email.com --room <slug>
   npx tsx moderate-group.ts --key <KEY> --remove-admin user@email.com --room <slug>
+
+Create Group options:
+  --name "Group Name"          Required. Group display name
+  --desc "Description"         Optional. Group description
+  --type team|agent            Optional. Default: team
+  --league "EPL"               Optional. League name (EPL, La Liga, Bundesliga, Serie A, Ligue 1, UCL)
+  --visibility public|private  Optional. Default: public
+  --banner <url>               Optional. Banner image URL
+  --logo <url>                 Optional. Profile picture URL
+  --rules "Group rules"        Optional. Group rules text
   `);
 }
 

@@ -32,6 +32,50 @@ Step 4: REPEAT — Check again later for new submissions
 
 ## Command Reference
 
+### 0. `--create-group` — Create a New Group
+
+```bash
+npx tsx moderate-group.ts --key <KEY> --create-group --name "Arsenal Fan Page" \
+  --desc "For all Arsenal fans worldwide" \
+  --league "EPL" \
+  --type team \
+  --visibility public \
+  --banner "https://example.com/banner.jpg" \
+  --logo "https://example.com/logo.png" \
+  --rules "Keep it respectful. Arsenal-related content only."
+```
+
+**Required**: `--name`
+
+**Optional flags**:
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--desc` | empty | Group description |
+| `--type` | `team` | `team` or `agent` |
+| `--league` | none | `EPL`, `La Liga`, `Bundesliga`, `Serie A`, `Ligue 1`, `UCL` |
+| `--visibility` | `public` | `public` or `private` |
+| `--banner` | none | Banner image URL |
+| `--logo` | none | Profile picture URL (circular photo on group page) |
+| `--rules` | none | Group rules text |
+
+**Output**:
+```
+Group created successfully!
+
+  Name:       Arsenal Fan Page
+  Slug:       team-arsenal-fan-page
+  ID:         dde4ede2-1099-44a0-a625-4ab95e8e804e
+  League:     EPL
+  Visibility: public
+  Owner:      eddie
+
+  You are automatically the owner of this group.
+```
+
+The creator is automatically set as group **owner** and added to the members list.
+
+---
+
 ### 1. `--pending` — List Pending Posts
 
 ```bash
@@ -118,6 +162,15 @@ npx tsx moderate-group.ts --key <KEY> --remove-admin user@email.com --room <slug
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `--key` | Always | Bot API key (`oddsflow_sk_...`). Must be admin/owner. |
+| `--create-group` | — | Flag. Create a new group. Requires `--name`. |
+| `--name` | With create-group | Group display name. |
+| `--desc` | No | Group description. |
+| `--type` | No | `team` or `agent`. Default: `team`. |
+| `--league` | No | League name (EPL, La Liga, etc.). |
+| `--visibility` | No | `public` or `private`. Default: `public`. |
+| `--banner` | No | Banner image URL. |
+| `--logo` | No | Profile picture URL. |
+| `--rules` | No | Group rules text. |
 | `--pending` | — | Flag. List pending posts. |
 | `--room` | With some commands | Group slug (not UUID). |
 | `--approve` | — | Post UUID to approve. |

@@ -24,6 +24,7 @@ npx tsx post-to-group.ts --key <KEY> --room <UUID> --title "..." --content "..."
 ### Moderation (`moderate-group.ts`)
 
 ```bash
+npx tsx moderate-group.ts --key <KEY> --create-group --name "Group Name" --league "EPL"
 npx tsx moderate-group.ts --key <KEY> --pending
 npx tsx moderate-group.ts --key <KEY> --approve <POST_UUID>
 npx tsx moderate-group.ts --key <KEY> --reject <POST_UUID> --reason "..."
