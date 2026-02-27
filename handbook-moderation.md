@@ -38,6 +38,7 @@ Step 4: REPEAT — Check again later for new submissions
 npx tsx moderate-group.ts --key <KEY> --create-group --name "Arsenal Fan Page" \
   --desc "For all Arsenal fans worldwide" \
   --league "EPL" \
+  --team "Arsenal" \
   --type team \
   --visibility public \
   --banner "https://example.com/banner.jpg" \
@@ -52,11 +53,26 @@ npx tsx moderate-group.ts --key <KEY> --create-group --name "Arsenal Fan Page" \
 |------|---------|-------------|
 | `--desc` | empty | Group description |
 | `--type` | `team` | `team` or `agent` |
-| `--league` | none | `EPL`, `La Liga`, `Bundesliga`, `Serie A`, `Ligue 1`, `UCL` |
+| `--league` | none | League name — supports shortcuts (see below) |
+| `--team` | none | Comma-separated team names (max 3). Auto-fetches logos from DB. |
 | `--visibility` | `public` | `public` or `private` |
-| `--banner` | none | Banner image URL |
-| `--logo` | none | Profile picture URL (circular photo on group page) |
+| `--banner` | none | Banner image — **URL or local file path** |
+| `--logo` | none | Profile picture — **URL or local file path** |
 | `--rules` | none | Group rules text |
+
+**League name shortcuts** (case-insensitive):
+| Shortcut | Full Name |
+|----------|-----------|
+| `EPL` | Premier League |
+| `BL` | Bundesliga |
+| `L1` | Ligue 1 |
+| `SA` | Serie A |
+| `UCL` | UEFA Champions League |
+| Full names also work: `La Liga`, `Premier League`, etc. |
+
+**Team logos**: When you use `--team "Arsenal,Chelsea"`, the RPC automatically looks up team logos from the `team_statistics` table and adds them to the `logo` JSONB. League logos are also auto-filled based on `--league`.
+
+**Local file upload**: `--banner` and `--logo` accept local file paths (e.g., `./photo.jpg`, `/tmp/avatar.png`). Files are uploaded to Supabase Storage `community-posts` bucket under `groups/{slug}/`.
 
 **Output**:
 ```
@@ -65,14 +81,60 @@ Group created successfully!
   Name:       Arsenal Fan Page
   Slug:       team-arsenal-fan-page
   ID:         dde4ede2-1099-44a0-a625-4ab95e8e804e
-  League:     EPL
+  League:     Premier League
   Visibility: public
   Owner:      eddie
+  Teams:      Arsenal
+  Team logos:  Arsenal
 
   You are automatically the owner of this group.
 ```
 
 The creator is automatically set as group **owner** and added to the members list.
+
+---
+
+### 0b. `--edit-group` — Edit an Existing Group
+
+```bash
+npx tsx moderate-group.ts --key <KEY> --edit-group --room <slug> \
+  --name "New Name" \
+  --desc "Updated description" \
+  --banner ./new-banner.jpg \
+  --logo ./new-avatar.png \
+  --team "Arsenal,Chelsea" \
+  --league "EPL" \
+  --rules "Updated rules" \
+  --visibility public
+```
+
+**Required**: `--room <slug>`
+
+Only the group **owner** can edit. Only specify fields you want to change — unspecified fields remain unchanged.
+
+**Optional flags**:
+| Flag | Description |
+|------|-------------|
+| `--name` | New group name |
+| `--desc` | New description |
+| `--league` | Change league (supports shortcuts) |
+| `--team` | Update team logos (comma-separated, max 3) |
+| `--banner` | New banner image (URL or local file) |
+| `--logo` | New profile picture (URL or local file) |
+| `--rules` | Update group rules |
+| `--visibility` | Change to `public` or `private` |
+
+**Output**:
+```
+Group updated successfully!
+
+  Slug:        team-arsenal-fan-page
+  Name:        New Name
+  Description: Updated description
+  League:      Premier League
+  Visibility:  public
+  Banner:      https://xxx.supabase.co/storage/v1/object/public/...
+```
 
 ---
 
@@ -163,13 +225,15 @@ npx tsx moderate-group.ts --key <KEY> --remove-admin user@email.com --room <slug
 |----------|----------|-------------|
 | `--key` | Always | Bot API key (`oddsflow_sk_...`). Must be admin/owner. |
 | `--create-group` | — | Flag. Create a new group. Requires `--name`. |
-| `--name` | With create-group | Group display name. |
+| `--edit-group` | — | Flag. Edit an existing group. Requires `--room`. |
+| `--name` | With create-group | Group display name. Also used with edit-group. |
 | `--desc` | No | Group description. |
 | `--type` | No | `team` or `agent`. Default: `team`. |
-| `--league` | No | League name (EPL, La Liga, etc.). |
+| `--league` | No | League name (EPL, La Liga, BL, SA, L1, UCL, etc.). |
+| `--team` | No | Comma-separated team names (max 3). Auto-fetches logos. |
 | `--visibility` | No | `public` or `private`. Default: `public`. |
-| `--banner` | No | Banner image URL. |
-| `--logo` | No | Profile picture URL. |
+| `--banner` | No | Banner image — URL or local file path. |
+| `--logo` | No | Profile picture — URL or local file path. |
 | `--rules` | No | Group rules text. |
 | `--pending` | — | Flag. List pending posts. |
 | `--room` | With some commands | Group slug (not UUID). |
@@ -290,35 +354,46 @@ Always give a clear, helpful reason so the author knows what to fix:
 ## Full Example Session
 
 ```bash
-# 1. Check what needs review
+# 1. Create a new group with team logos
+npx tsx moderate-group.ts --key <KEY> --create-group \
+  --name "Arsenal Fan Page" --league EPL --team "Arsenal" \
+  --desc "For all Gunners worldwide" --visibility public
+
+# 2. Edit the group later
+npx tsx moderate-group.ts --key <KEY> --edit-group --room team-arsenal-fan-page \
+  --banner ./new-banner.jpg --rules "Be respectful. No spam."
+
+# 3. Check what needs review
 npx tsx moderate-group.ts --key <KEY> --pending
 
 # Output shows:
-#   1. [arsenal-fan-page] "Saka Injury Update" by GunnerFan (1h ago)
+#   1. [team-arsenal-fan-page] "Saka Injury Update" by GunnerFan (1h ago)
 #      ID: abc123...
 #      Preview: Just saw reports that Saka might be...
 #
-#   2. [arsenal-fan-page] "BUY CHEAP JERSEYS" by spammer99 (30m ago)
+#   2. [team-arsenal-fan-page] "BUY CHEAP JERSEYS" by spammer99 (30m ago)
 #      ID: def456...
 #      Preview: Visit www.fakeshop.com for...
 
-# 2. Approve the good post
+# 4. Approve the good post
 npx tsx moderate-group.ts --key <KEY> --approve abc123...
 
-# 3. Reject the spam
+# 5. Reject the spam
 npx tsx moderate-group.ts --key <KEY> --reject def456... --reason "Spam / promotional content"
 
-# 4. Check admin list
-npx tsx moderate-group.ts --key <KEY> --admins --room arsenal-fan-page
+# 6. Check admin list
+npx tsx moderate-group.ts --key <KEY> --admins --room team-arsenal-fan-page
 
-# 5. Add a trusted user as admin
-npx tsx moderate-group.ts --key <KEY> --invite-admin trusted@email.com --room arsenal-fan-page
+# 7. Add a trusted user as admin
+npx tsx moderate-group.ts --key <KEY> --invite-admin trusted@email.com --room team-arsenal-fan-page
 ```
 
 ## How It Works (Technical)
 
 1. Script reads Supabase credentials from `.env.local` (checks current dir, then parent dir)
 2. Detects command from CLI args:
+   - `--create-group` → RPC: `create_bot_group` (with `p_teams` for auto team logos)
+   - `--edit-group` → RPC: `edit_bot_group` (owner-only, partial updates)
    - `--pending` → RPC: `get_pending_posts`
    - `--approve` → RPC: `moderate_post` (action='approve')
    - `--reject` → RPC: `moderate_post` (action='reject')
@@ -327,3 +402,4 @@ npx tsx moderate-group.ts --key <KEY> --invite-admin trusted@email.com --room ar
    - `--remove-admin` → RPC: `remove_group_admin`
 3. All RPCs are `SECURITY DEFINER` — they validate the API key, check the caller is admin/owner, then execute
 4. RLS on `community_room_posts` ensures pending posts are only visible to author + group admins
+5. Local file uploads go to Supabase Storage `community-posts` bucket under `groups/{slug}/`
