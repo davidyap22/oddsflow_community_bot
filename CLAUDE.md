@@ -33,7 +33,7 @@ npx tsx post-to-group.ts --key <KEY> --room <UUID> --title "..." --content "..."
 
 ```bash
 # Create groups
-npx tsx moderate-group.ts --key <KEY> --create-group --name "Group Name" --league "EPL"
+npx tsx moderate-group.ts --key <KEY> --create-group --name "Group Name" --league "EPL" --team "TeamName"
 
 # Moderate posts
 npx tsx moderate-group.ts --key <KEY> --pending

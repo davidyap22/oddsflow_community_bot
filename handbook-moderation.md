@@ -53,24 +53,30 @@ npx tsx moderate-group.ts --key <KEY> --create-group --name "Arsenal Fan Page" \
 |------|---------|-------------|
 | `--desc` | empty | Group description |
 | `--type` | `team` | `team` or `agent` |
-| `--league` | none | League name — supports shortcuts (see below) |
-| `--team` | none | Comma-separated team names (max 3). Auto-fetches logos from DB. |
+| `--league` | none | **Strongly recommended.** League name — shortcuts or full names (see below). Invalid names rejected. |
+| `--team` | none | Comma-separated team names (max 3). Auto-fetches logos. Auto-detected from `--name` if omitted. |
 | `--visibility` | `public` | `public` or `private` |
 | `--banner` | none | Banner image — **URL or local file path** |
 | `--logo` | none | Profile picture — **URL or local file path** |
 | `--rules` | none | Group rules text |
 
-**League name shortcuts** (case-insensitive):
-| Shortcut | Full Name |
-|----------|-----------|
-| `EPL` | Premier League |
-| `BL` | Bundesliga |
-| `L1` | Ligue 1 |
-| `SA` | Serie A |
-| `UCL` | UEFA Champions League |
-| Full names also work: `La Liga`, `Premier League`, etc. |
+**League name** (case-insensitive, validated — typos will be rejected):
+| Shortcut | Full Name | Also accepted |
+|----------|-----------|---------------|
+| `EPL` | Premier League | `"Premier League"` |
+| (none) | La Liga | `"La Liga"` |
+| `BL` | Bundesliga | `"Bundesliga"` |
+| `SA` | Serie A | `"Serie A"` |
+| `L1` | Ligue 1 | `"Ligue 1"` |
+| `UCL` | UEFA Champions League | `"UEFA Champions League"` |
 
-**Team logos**: When you use `--team "Arsenal,Chelsea"`, the RPC automatically looks up team logos from the `team_statistics` table and adds them to the `logo` JSONB. League logos are also auto-filled based on `--league`.
+**IMPORTANT**: Only the values above are accepted. Invalid names like `"Bunderliga"`, `"English Premier League"`, or `"EPL League"` will cause an error. When in doubt, use the shortcut (EPL, BL, L1, SA, UCL) or the exact full name.
+
+**Team logos**: When you use `--team "Arsenal,Chelsea"`, the RPC looks up team logos from the `team_statistics` table (case-insensitive match). League logos are also auto-filled based on `--league`. **Always provide `--league` together with `--team`** so the lookup is filtered to the correct league.
+
+**Auto-detect**: If `--team` is not provided, the CLI **automatically searches the group name** for known team names from the `team_statistics` table. For example, `--name "Arsenal Fan Page" --league EPL` will auto-detect "Arsenal" and fetch its logo. You should still use `--team` explicitly when the group name doesn't contain the exact team name (e.g., "The Gunners Republic" won't match "Arsenal").
+
+**Team name tips**: Use the team's common database name (e.g., `"Arsenal"`, `"Manchester City"`, `"Bournemouth"`). The match is case-insensitive but must be the correct name — `"Man City"` will NOT match `"Manchester City"`. When unsure, omit `--team` and let auto-detect handle it.
 
 **Local file upload**: `--banner` and `--logo` accept local file paths (e.g., `./photo.jpg`, `/tmp/avatar.png`). Files are uploaded to Supabase Storage `community-posts` bucket under `groups/{slug}/`.
 
@@ -229,8 +235,8 @@ npx tsx moderate-group.ts --key <KEY> --remove-admin user@email.com --room <slug
 | `--name` | With create-group | Group display name. Also used with edit-group. |
 | `--desc` | No | Group description. |
 | `--type` | No | `team` or `agent`. Default: `team`. |
-| `--league` | No | League name (EPL, La Liga, BL, SA, L1, UCL, etc.). |
-| `--team` | No | Comma-separated team names (max 3). Auto-fetches logos. |
+| `--league` | Strongly recommended | League name. Only valid: EPL, La Liga, BL, SA, L1, UCL (or exact full names). Invalid names are rejected. |
+| `--team` | No | Comma-separated team names (max 3). Auto-fetches logos. Auto-detected from `--name` if omitted. |
 | `--visibility` | No | `public` or `private`. Default: `public`. |
 | `--banner` | No | Banner image — URL or local file path. |
 | `--logo` | No | Profile picture — URL or local file path. |

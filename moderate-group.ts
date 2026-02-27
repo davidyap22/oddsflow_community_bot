@@ -134,6 +134,48 @@ function parseTeams(teamStr: string | null): string[] {
   return teamStr.split(',').map(t => t.trim()).filter(Boolean).slice(0, 3);
 }
 
+// Normalize league name — must match RPC exactly
+const VALID_LEAGUES: Record<string, string> = {
+  EPL: 'Premier League', BL: 'Bundesliga', L1: 'Ligue 1',
+  SA: 'Serie A', UCL: 'UEFA Champions League',
+  'PREMIER LEAGUE': 'Premier League', 'LA LIGA': 'La Liga',
+  BUNDESLIGA: 'Bundesliga', 'SERIE A': 'Serie A',
+  'LIGUE 1': 'Ligue 1', 'UEFA CHAMPIONS LEAGUE': 'UEFA Champions League',
+};
+
+function normalizeLeague(league: string | null): string | null {
+  if (!league) return null;
+  const mapped = VALID_LEAGUES[league.toUpperCase().trim()];
+  if (!mapped) {
+    console.error(`  Invalid league: "${league}". Valid: EPL, La Liga, BL, SA, L1, UCL (or full names)`);
+    process.exit(1);
+  }
+  return mapped;
+}
+
+// Auto-detect team name from group name by searching team_statistics
+async function autoDetectTeam(groupName: string, league: string | null): Promise<string[]> {
+  const leagueDb = normalizeLeague(league);
+
+  // Query all teams from this league
+  let query = supabase.from('team_statistics').select('team_name');
+  if (leagueDb) query = query.eq('league_name', leagueDb);
+
+  const { data: teams } = await query;
+  if (!teams || teams.length === 0) return [];
+
+  // Find team names that appear in the group name (case-insensitive)
+  const nameLower = groupName.toLowerCase();
+  const matched = teams
+    .filter(t => t.team_name && nameLower.includes(t.team_name.toLowerCase()))
+    .map(t => t.team_name as string)
+    // Sort by name length descending so "Manchester United" matches before "Manchester"
+    .sort((a, b) => b.length - a.length);
+
+  // Deduplicate and limit to 1 (auto-detect only finds the primary team)
+  return matched.length > 0 ? [matched[0]] : [];
+}
+
 // ============================================================
 // Command: --pending
 // ============================================================
@@ -272,7 +314,18 @@ async function handleCreateGroup() {
   if (!apiKey) { console.error('Error: --key is required'); process.exit(1); }
   if (!groupName) { console.error('Error: --name is required'); process.exit(1); }
 
-  const teams = parseTeams(groupTeams);
+  // Validate league name early (before any DB calls)
+  if (groupLeague) normalizeLeague(groupLeague);
+
+  let teams = parseTeams(groupTeams);
+
+  // Auto-detect team from group name if --team not provided
+  if (teams.length === 0 && groupName) {
+    teams = await autoDetectTeam(groupName, groupLeague);
+    if (teams.length > 0) {
+      console.log(`  Auto-detected team: ${teams.join(', ')}`);
+    }
+  }
 
   // Generate a temporary slug for file uploads
   const tempSlug = `${groupType}-${groupName.trim().toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')}`;
@@ -334,7 +387,19 @@ async function handleEditGroup() {
   if (!apiKey) { console.error('Error: --key is required'); process.exit(1); }
   if (!roomSlug) { console.error('Error: --room <slug> is required for --edit-group'); process.exit(1); }
 
-  const teams = groupTeams ? parseTeams(groupTeams) : null;
+  // Validate league name early (before any DB calls)
+  if (groupLeague) normalizeLeague(groupLeague);
+
+  let teams = groupTeams ? parseTeams(groupTeams) : null;
+
+  // Auto-detect team from group name if --team not provided but --name is given
+  if (!teams && groupName) {
+    const detected = await autoDetectTeam(groupName, groupLeague);
+    if (detected.length > 0) {
+      teams = detected;
+      console.log(`  Auto-detected team: ${teams.join(', ')}`);
+    }
+  }
 
   // Resolve banner and logo (support local files)
   const bannerUrl = await resolveImagePath(groupBanner, roomSlug, 'banner');
