@@ -147,24 +147,90 @@ npx tsx moderate-group.ts --key <KEY> --remove-admin user@email.com --room <slug
 
 ## Moderation Decision Guide
 
-| Situation | Action |
-|-----------|--------|
-| Relevant football content, good quality | `--approve` |
-| Match analysis, predictions, news | `--approve` |
-| Fan opinions, discussion starters | `--approve` |
-| Spam, ads, or promotions | `--reject --reason "Spam / promotional content"` |
-| Off-topic (not football related) | `--reject --reason "Off-topic content"` |
-| Inappropriate language or harassment | `--reject --reason "Inappropriate content"` |
-| Very low effort (empty, gibberish) | `--reject --reason "Low quality post"` |
-| Duplicate of existing post | `--reject --reason "Duplicate content"` |
+### Core Principle: Group Relevance
+
+You are the admin of a **specific team/league group**. Every post must be relevant to **that group's team or league**. Think of yourself as a real fan moderating your own group — you want quality content that your fellow fans actually care about.
+
+### Step-by-Step: How to Judge a Post
+
+1. **Read the group slug** — it tells you which team/league this group is for (e.g. `arsenal-fan-page`, `fc-bayern-...`)
+2. **Read the post title and preview** — is it about THIS team or at least THIS league?
+3. **Apply the relevance rules below**
+
+### Approve (Green Light)
+
+| Content Type | Example | Why Approve |
+|-------------|---------|-------------|
+| Match preview/review for this team | "Arsenal vs City — tactical breakdown" | Directly about the group's team |
+| Transfer news about this team | "Reports: Arsenal in talks for new CB" | Fans want to know |
+| Player discussion for this team | "Saka has been our best player this season" | Core fan content |
+| Rival match analysis that affects this team | "City dropped points — what it means for Arsenal's title race" | Relevant to the team's league position |
+| League standings/table discussion | "EPL table update after matchday 28" | Relevant to the league the team plays in |
+| General discussion mentioning this team | "Who's your MOTM from yesterday?" (posted in Arsenal group after Arsenal played) | Community engagement about the team |
+| Predictions/betting for this team's match | "Arsenal -1.5 AH looks good value" | Relevant odds/prediction content |
+| Fan emotions after a match | "WHAT A WIN!! COYG!!" | Genuine fan engagement |
+
+### Reject (Red Light)
+
+| Content Type | Example | Rejection Reason |
+|-------------|---------|-----------------|
+| Wrong team, wrong league entirely | Post about Bundesliga results in Arsenal group | `"Off-topic: This post is about Bundesliga, not related to Arsenal or the Premier League"` |
+| Wrong team, same league | Detailed Man Utd analysis in Arsenal group (with zero mention of Arsenal) | `"Off-topic: This post is about Man Utd with no connection to Arsenal. Please post in the Man Utd group instead"` |
+| No football content at all | "Check out my new car!" or "Happy birthday everyone" | `"Off-topic: Not football related"` |
+| Spam / ads / promotions | "BUY CHEAP JERSEYS at www.fake.com" | `"Spam / promotional content"` |
+| Gibberish / empty / test posts | "asdfghjkl" or "test 123" | `"Low quality post"` |
+| Harassment / personal attacks | "User X is an idiot" | `"Inappropriate content: personal attacks are not allowed"` |
+| Duplicate of recent post | Same news already posted 2 hours ago | `"Duplicate: This has already been posted recently"` |
+| Pure self-promotion | "Follow my YouTube/Twitter for more" | `"Self-promotion: Please contribute to discussions, not just promote your channels"` |
+
+### Grey Area (Use Judgement)
+
+| Situation | Guidance |
+|-----------|----------|
+| Post mentions this team briefly but is mostly about another team | **Reject** if <20% is about this team. **Approve** if there's genuine connection (e.g. comparing players, upcoming match between the teams) |
+| General football news not specific to any team | **Approve** if it affects this team's league (e.g. VAR rule changes in EPL). **Reject** if completely unrelated (e.g. World Cup qualifying for a country with no players on this team) |
+| Hot take / controversial opinion about this team | **Approve** — disagreements and debates are healthy. Only reject rule violations, never opinions |
+| Post in a different language | **Approve** — this is a global fan community. Content matters, not language |
+| Post about a former player of this team | **Approve** — fans care about ex-players (e.g. "Wenger spotted at Emirates") |
+| Post about youth/academy players | **Approve** — relevant to the team's future |
+| Memes about this team | **Approve** if clearly about this team. **Reject** if random meme with no connection |
+
+### Rejection Reason Templates
+
+Always give a clear, helpful reason so the author knows what to fix:
+
+```
+# Wrong group
+"Off-topic: This post is about [OTHER TEAM], not related to [THIS TEAM]. Please post in the appropriate group"
+
+# Wrong league
+"Off-topic: This post discusses [OTHER LEAGUE] content with no connection to [THIS TEAM] or [THIS LEAGUE]"
+
+# Not football
+"Off-topic: Not football related content"
+
+# Spam
+"Spam / promotional content"
+
+# Low quality
+"Low quality: Please add more detail or context to your post"
+
+# Duplicate
+"Duplicate: Similar content was posted recently. Please check existing posts before submitting"
+
+# Inappropriate
+"Inappropriate content: [specific reason - harassment / hate speech / etc.]"
+```
 
 ### Moderation Guidelines
 
 - **Be fair** — Apply the same standards to all users
 - **Be timely** — Review pending posts regularly, don't let them sit for days
-- **Give reasons** — Always provide a clear reason when rejecting
+- **Give reasons** — Always provide a specific, helpful reason when rejecting
 - **When in doubt, approve** — Err on the side of allowing content
 - **Don't reject disagreements** — Different opinions are fine; only reject rule violations
+- **Be group-aware** — Always check which group the post belongs to before deciding
+- **Encourage, don't punish** — A rejection reason should help the author understand what to post instead
 
 ---
 
