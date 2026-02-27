@@ -1,11 +1,17 @@
 /**
- * Post content to a community group discussion (using anon key + RPC)
+ * Community bot CLI — post, react, comment, reply, feed, view (using anon key + RPC)
  *
  * Usage:
  *   npx tsx post-to-group.ts --list-rooms
+ *   npx tsx post-to-group.ts --feed [--room <room_uuid>] [--limit 10]
+ *   npx tsx post-to-group.ts --view <post_uuid>
  *   npx tsx post-to-group.ts --key <api_key> --room <room_id> --title "Title" --content "Content"
  *   npx tsx post-to-group.ts --key <api_key> --room <room_id> --title "Title" --content "Content" --images img1.jpg img2.png
  *   npx tsx post-to-group.ts --key <api_key> --room <room_id> --title "Title" --content "Content" --name "OddsFlow AI" --pin
+ *   npx tsx post-to-group.ts --key <api_key> --react <post_uuid> --emoji 👍
+ *   npx tsx post-to-group.ts --key <api_key> --react-comment <comment_uuid> --emoji 👍
+ *   npx tsx post-to-group.ts --key <api_key> --comment <post_uuid> --content "Great analysis!"
+ *   npx tsx post-to-group.ts --key <api_key> --reply <comment_uuid> --post <post_uuid> --content "Thanks!"
  *
  * Environment variables in .env.local:
  *   NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
@@ -76,6 +82,298 @@ async function listAllRooms() {
     console.log(`  ${g.slug.padEnd(30)}  ${g.member_count}`);
   }
   console.log(`\nUsage: npx tsx post-to-group.ts --room <SLUG> --title "..." --content "..."\n`);
+}
+
+async function reactToPost() {
+  const apiKey = getArg('key');
+  const postId = getArg('react');
+  const emoji = getArg('emoji');
+
+  if (!apiKey || !postId || !emoji) {
+    console.error('Usage: npx tsx post-to-group.ts --key <api_key> --react <post_uuid> --emoji 👍');
+    process.exit(1);
+  }
+
+  const { data, error } = await supabase.rpc('create_bot_reaction', {
+    p_api_key: apiKey,
+    p_post_id: postId,
+    p_emoji: emoji,
+  });
+
+  if (error) {
+    console.error('Reaction failed:', error.message);
+    process.exit(1);
+  }
+
+  console.log(`\nReaction ${data.action}: ${data.emoji} on post ${data.post_id}`);
+}
+
+async function commentOnPost() {
+  const apiKey = getArg('key');
+  const postId = getArg('comment');
+  const content = getArg('content');
+
+  if (!apiKey || !postId || !content) {
+    console.error('Usage: npx tsx post-to-group.ts --key <api_key> --comment <post_uuid> --content "Your comment"');
+    process.exit(1);
+  }
+
+  const { data, error } = await supabase.rpc('create_bot_comment', {
+    p_api_key: apiKey,
+    p_post_id: postId,
+    p_content: content,
+  });
+
+  if (error) {
+    console.error('Comment failed:', error.message);
+    process.exit(1);
+  }
+
+  console.log(`\nComment added to post ${postId}`);
+  console.log(`   ID: ${data.id}`);
+  console.log(`   Author: ${data.author_name}`);
+}
+
+async function replyToComment() {
+  const apiKey = getArg('key');
+  const parentId = getArg('reply');
+  const postId = getArg('post');
+  const content = getArg('content');
+
+  if (!apiKey || !parentId || !postId || !content) {
+    console.error('Usage: npx tsx post-to-group.ts --key <api_key> --reply <comment_uuid> --post <post_uuid> --content "Your reply"');
+    process.exit(1);
+  }
+
+  const { data, error } = await supabase.rpc('create_bot_comment', {
+    p_api_key: apiKey,
+    p_post_id: postId,
+    p_content: content,
+    p_parent_id: parentId,
+  });
+
+  if (error) {
+    console.error('Reply failed:', error.message);
+    process.exit(1);
+  }
+
+  console.log(`\nReply added to comment ${parentId}`);
+  console.log(`   ID: ${data.id}`);
+  console.log(`   Author: ${data.author_name}`);
+  console.log(`   Parent: ${data.parent_id}`);
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+async function smartFeed() {
+  const roomId = getArg('room');
+  const limitStr = getArg('limit');
+  const limit = limitStr ? parseInt(limitStr, 10) : 10;
+
+  // Fetch posts from last 7 days
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  let query = supabase
+    .from('community_room_posts')
+    .select('id, title, content, author_name, comments_count, likes_count, created_at, room_id, is_pinned')
+    .gte('created_at', sevenDaysAgo)
+    .order('created_at', { ascending: false });
+
+  if (roomId) {
+    // Resolve UUID to slug since room_id stores slug
+    const { data: group } = await supabase
+      .from('community_groups')
+      .select('slug')
+      .eq('id', roomId)
+      .single();
+    if (group) {
+      query = query.eq('room_id', group.slug);
+    } else {
+      // Try using roomId directly as slug
+      query = query.eq('room_id', roomId);
+    }
+  }
+
+  const { data: posts, error } = await query;
+
+  if (error) {
+    console.error('Feed error:', error.message);
+    process.exit(1);
+  }
+
+  if (!posts || posts.length === 0) {
+    console.log('\nNo posts in the last 7 days.');
+    return;
+  }
+
+  // Score each post
+  const scored = posts.map(p => {
+    const ageMs = Date.now() - new Date(p.created_at).getTime();
+    const ageHours = ageMs / (1000 * 60 * 60);
+
+    let score = 0;
+    // Recency
+    if (ageHours < 24) score += 100;
+    else if (ageHours < 48) score += 50;
+    else score += 20;
+    // Engagement
+    score += (p.comments_count || 0) * 3 + (p.likes_count || 0);
+    // Pinned
+    if (p.is_pinned) score += 200;
+
+    // Tag
+    let tag = '';
+    if (p.is_pinned) tag = 'PIN';
+    else if (ageHours < 24) tag = 'NEW';
+    else if ((p.comments_count || 0) >= 5 || (p.likes_count || 0) >= 5) tag = 'HOT';
+
+    return { ...p, score, tag };
+  });
+
+  // Sort by score descending
+  scored.sort((a, b) => b.score - a.score);
+  const feed = scored.slice(0, limit);
+
+  console.log(`\nFeed (${feed.length} posts):\n`);
+  feed.forEach((p, i) => {
+    const tagStr = p.tag ? `[${p.tag}] ` : '';
+    const preview = (p.content || '').slice(0, 80).replace(/\n/g, ' ');
+    console.log(`${(i + 1).toString().padStart(2)}. ${tagStr}"${p.title}" by ${p.author_name} (${timeAgo(p.created_at)}) — ${p.room_id}`);
+    console.log(`    👍${p.likes_count || 0}  💬${p.comments_count || 0}    ID: ${p.id}`);
+    if (preview) console.log(`    Preview: ${preview}${(p.content || '').length > 80 ? '...' : ''}`);
+    console.log('');
+  });
+}
+
+async function viewPost() {
+  const postId = getArg('view');
+
+  if (!postId) {
+    console.error('Usage: npx tsx post-to-group.ts --view <post_uuid>');
+    process.exit(1);
+  }
+
+  // Fetch post
+  const { data: post, error: postErr } = await supabase
+    .from('community_room_posts')
+    .select('id, title, content, author_name, comments_count, likes_count, created_at, room_id, is_pinned, content_type, tags, metadata')
+    .eq('id', postId)
+    .single();
+
+  if (postErr || !post) {
+    console.error('Post not found:', postErr?.message || 'No data');
+    process.exit(1);
+  }
+
+  // Fetch reactions for this post
+  const { data: reactions } = await supabase
+    .from('community_post_reactions')
+    .select('emoji')
+    .eq('post_id', postId);
+
+  // Group reactions by emoji
+  const emojiCounts: Record<string, number> = {};
+  if (reactions) {
+    for (const r of reactions) {
+      emojiCounts[r.emoji] = (emojiCounts[r.emoji] || 0) + 1;
+    }
+  }
+  const reactionsStr = Object.entries(emojiCounts).map(([e, c]) => `${e}${c}`).join(' ') || 'none';
+
+  // Print post
+  console.log(`\nPOST: "${post.title}"`);
+  console.log(`Author: ${post.author_name}`);
+  console.log(`Date: ${new Date(post.created_at).toLocaleString()} (${timeAgo(post.created_at)})`);
+  console.log(`Group: ${post.room_id}`);
+  if (post.is_pinned) console.log(`Pinned: yes`);
+  console.log(`Reactions: ${reactionsStr}`);
+  console.log(`\nContent:`);
+  console.log(post.content);
+
+  // Fetch comments
+  const { data: comments } = await supabase
+    .from('community_post_comments')
+    .select('id, author_name, content, created_at, parent_id, likes_count')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true });
+
+  if (!comments || comments.length === 0) {
+    console.log(`\nComments (0): none`);
+    return;
+  }
+
+  // Fetch comment reactions
+  const commentIds = comments.map(c => c.id);
+  const { data: commentReactions } = await supabase
+    .from('community_comment_reactions')
+    .select('comment_id, emoji')
+    .in('comment_id', commentIds);
+
+  // Group comment reactions
+  const commentEmojiMap: Record<string, Record<string, number>> = {};
+  if (commentReactions) {
+    for (const r of commentReactions) {
+      if (!commentEmojiMap[r.comment_id]) commentEmojiMap[r.comment_id] = {};
+      commentEmojiMap[r.comment_id][r.emoji] = (commentEmojiMap[r.comment_id][r.emoji] || 0) + 1;
+    }
+  }
+
+  // Separate top-level and replies
+  const topLevel = comments.filter(c => !c.parent_id);
+  const replies = comments.filter(c => c.parent_id);
+  const replyMap: Record<string, typeof comments> = {};
+  for (const r of replies) {
+    if (!replyMap[r.parent_id]) replyMap[r.parent_id] = [];
+    replyMap[r.parent_id].push(r);
+  }
+
+  console.log(`\nComments (${comments.length}):`);
+  for (const c of topLevel) {
+    const cReactions = commentEmojiMap[c.id];
+    const cReactStr = cReactions ? ' ' + Object.entries(cReactions).map(([e, n]) => `${e}${n}`).join(' ') : '';
+    console.log(`  [${c.id}] ${c.author_name} (${timeAgo(c.created_at)}): ${c.content}${cReactStr}`);
+
+    // Print replies
+    const childReplies = replyMap[c.id] || [];
+    for (const r of childReplies) {
+      const rReactions = commentEmojiMap[r.id];
+      const rReactStr = rReactions ? ' ' + Object.entries(rReactions).map(([e, n]) => `${e}${n}`).join(' ') : '';
+      console.log(`    [${r.id}] ${r.author_name} (${timeAgo(r.created_at)}): ${r.content}${rReactStr}`);
+    }
+  }
+}
+
+async function reactToComment() {
+  const apiKey = getArg('key');
+  const commentId = getArg('react-comment');
+  const emoji = getArg('emoji');
+
+  if (!apiKey || !commentId || !emoji) {
+    console.error('Usage: npx tsx post-to-group.ts --key <api_key> --react-comment <comment_uuid> --emoji 👍');
+    process.exit(1);
+  }
+
+  const { data, error } = await supabase.rpc('create_bot_comment_reaction', {
+    p_api_key: apiKey,
+    p_comment_id: commentId,
+    p_emoji: emoji,
+  });
+
+  if (error) {
+    console.error('Comment reaction failed:', error.message);
+    process.exit(1);
+  }
+
+  console.log(`\nReaction ${data.action}: ${data.emoji} on comment ${data.comment_id}`);
 }
 
 async function createPost() {
@@ -172,6 +470,18 @@ async function createPost() {
 async function main() {
   if (listRooms) {
     await listAllRooms();
+  } else if (args.includes('--feed')) {
+    await smartFeed();
+  } else if (getArg('view')) {
+    await viewPost();
+  } else if (getArg('react-comment')) {
+    await reactToComment();
+  } else if (getArg('react')) {
+    await reactToPost();
+  } else if (getArg('comment')) {
+    await commentOnPost();
+  } else if (getArg('reply')) {
+    await replyToComment();
   } else {
     await createPost();
   }
